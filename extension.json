@@ -1,0 +1,129 @@
+{
+    "id": "ibm.devops.services.pipeline.test",
+    "version": 1,
+    "name_key": "ExtName",
+    "desc_key": "ExtDesc",
+    "extension_type": "Build",
+    "message_key": "ExtMessage",
+    "inputs": [
+        {
+            "type": "Bluemix",
+            "inclusion" : "always"
+        }
+    ],
+    "params": [
+        {
+            "name": "USE_CACHED_LAYERS",
+            "type": "Text",
+            "required": "false",
+            "default_value":"true",
+            "label_key": "CACHE_KEY",
+            "desc_key": "CACHE_DESC"
+        },        
+        {
+            "name": "IMAGE_NAME",
+            "type": "Text",
+            "required": "false",
+            "label_key": "IMAGE_NAME_KEY",
+            "desc_key": "IMAGE_NAME_DESC"
+        },
+        {
+            "name": "ARCHIVE_DIR",
+            "type": "Text",
+            "required": "true",
+            "default": "",
+            "label_key": "ARCHIVE_DIR_KEY",
+            "desc_key": "ARCHIVE_DIR_DESC"
+        },
+        {
+            "name": "COMMAND",
+            "type": "TextArea",
+            "required": "true",
+            "default_value" : "#!/bin/bash
+# The following colors have been defined to help with presentation of logs: green, red, label_color, no_color.  
+echo -e \"${label_color}Starting build script${no_color}\"
+
+# The IBM Container Service CLI (ice), Git client (git), IDS Inventory CLI (ids-inv) and Python 2.7.3 (python) have been installed.
+# Based on the organization and space selected in the Job credentials are in place for both IBM Container Service and IBM Bluemix 
+#####################
+# Run unit tests    #
+#####################
+echo -e \"${label_color}No unit tests cases have been checked in ${no_color}\"
+
+######################################
+# Build Container via Dockerfile     #
+######################################
+
+# REGISTRY_URL=${CCS_REGISTRY_HOST}/${NAMESPACE}
+# FULL_REPOSITORY_NAME=${REGISTRY_URL}/${IMAGE_NAME}:${APPLICATION_VERSION}
+
+if [ -f Dockerfile ]; then 
+    echo -e \"${label_color}Building ${FULL_REPOSITORY_NAME} ${no_color}\"
+    BUILD_COMMAND=\"\"
+    if [ \"${USE_CACHED_LAYERS}\" == \"true\" ]; then 
+        BUILD_COMMAND=\"ice build --pull --tag ${FULL_REPOSITORY_NAME} ${WORKSPACE}\"
+        ${BUILD_COMMAND}
+        RESULT=$?
+    else 
+        BUILD_COMMAND=\"ice build --no-cache --tag ${FULL_REPOSITORY_NAME} ${WORKSPACE}\"
+        ${BUILD_COMMAND}
+        RESULT=$?
+    fi 
+
+    if [ $RESULT -ne 0 ]; then
+        echo -e \"${red}Error building image ${no_color}\" | tee -a \"$ERROR_LOG_FILE\"
+        echo \"Build command: ${BUILD_COMMAND}\"
+        ice info 
+        ice images
+        ${EXT_DIR}/print_help.sh
+        exit 1
+    else
+        echo -e \"${green}Container build of ${FULL_REPOSITORY_NAME} was successful ${no_color}\"
+    fi  
+else 
+    echo -e \"${red}Dockerfile not found in project${no_color}\"
+    exit 1
+fi  
+
+########################################################################################
+# Copy any artifacts that will be needed for deployment and testing to $archive_dir    #
+########################################################################################
+echo \"IMAGE_NAME=${FULL_REPOSITORY_NAME}\" >> ${ARCHIVE_DIR}/build.properties",
+            "label_key": "COMMAND_KEY",
+            "desc_key": "COMMAND_DESC"
+        }
+    ],
+    "outputs": [
+        {
+            "type": "Artifacts",
+            "inclusion" : "always"
+        }
+    ],
+    "execution": {
+        "type": "JenkinsDocker",
+        "shell": "#!/bin/bash
+set +x
+set +e
+export INIT_START_TIME=$(date +\"%s\")
+export ARCHIVE_DIR=#ARCHIVE_DIR#
+export IMAGE_NAME=#IMAGE_NAME#
+export USE_CACHED_LAYERS=#USE_CACHED_LAYERS#
+# OSSC line
+dpkg -l | grep '^ii' > $EXT_DIR/pkglist
+. $EXT_DIR/_init.sh
+# OSSC line
+dpkg -l | grep '^ii' > $EXT_DIR/pkglist2
+if [[ $DEBUG -eq 1 ]]; then
+    diff $EXT_DIR/pkglist $EXT_DIR/pkglist2
+fi
+INIT_END_TIME=$(date +\"%s\")
+INIT_EST_TIME=$(($INIT_END_TIME-$INIT_START_TIME))
+echo -e \"Init runtime of `date -u -d @\"$INIT_EST_TIME\" +\'%-Mm %-Ss\'`\"
+
+/bin/bash -e #COMMAND#"
+    }
+    },
+    "project": "https://hub.jazz.net/project/alchemy/Alchemy-Ostanes",
+    "project_example": "https://hub.jazz.net/pipeline/rjminsha/ice-pipeline_demo",
+    "project_contact": "rjminsha@us.ibm.com"
+}
